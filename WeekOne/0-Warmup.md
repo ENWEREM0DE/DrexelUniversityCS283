@@ -34,11 +34,14 @@ Please provide answers to these questions using markdown notation and place them
     - [ ] NO - Not Yet
 
 
-3. Please provide a link to the repository you are using for this class.
+3. Please provide a link to the repository you are using for this class. 
 
+[https://github.com/ENWEREM0DE/DrexelUniversityCS283](https://github.com/ENWEREM0DE/DrexelUniversityCS283)
 
 4. Briefly describe what you want to get out of this class.
-With this class, I want to learn what really happens inside of the computer. I want to learn how 
+
+With this class, I want to learn how the software we write interacts with hardware to create practical applications.
 
 5. Briefly describe any concerns you might be having with being successful in this class (if any).
+
 I have no concerns with this class.
