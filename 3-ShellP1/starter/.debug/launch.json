@@ -1,13 +1,13 @@
 {
     "configurations": [
         {
-            "name": "(gdb) 3-ShellP1",
+            "name": "(gdb) 4-ShellP2",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/3-ShellP1/starter/dsh",
+            "program": "${workspaceFolder}/4-ShellP2/starter/dsh",
             "args": [""],
             "stopAtEntry": false,
-            "cwd": "${workspaceFolder}/3-ShellP1/starter",
+            "cwd": "${workspaceFolder}/4-ShellP2/starter",
             "environment": [],
             "externalConsole": false,
             "MIMode": "gdb",
@@ -23,7 +23,7 @@
                     "ignoreFailures": true
                 }
             ],
-            "preLaunchTask": "Build 3-ShellP1"
+            "preLaunchTask": "Build 4-ShellP2"
         }
     ]
 }

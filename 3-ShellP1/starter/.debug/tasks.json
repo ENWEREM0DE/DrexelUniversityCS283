@@ -1,20 +1,19 @@
 {
-    "version": "2.0.0",
-    "tasks": [
-      {
-        "label": "Build 3-ShellP1",
-        "type": "shell",
-        "command": "make",
-        "group": {
-          "kind": "build",
-          "isDefault": true
-        },
-        "options": {
-          "cwd": "${workspaceFolder}/3-ShellP1/starter"
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Build 4-ShellP2",
+      "type": "shell",
+      "command": "make",
+      "group": {
+        "kind": "build",
+        "isDefault": true
       },
-        "problemMatcher": ["$gcc"],
-        "detail": "Runs the 'make' command to build the project."
-      }
-    ]
-  }
-  
+      "options": {
+        "cwd": "${workspaceFolder}/4-ShellP2/starter"
+    },
+      "problemMatcher": ["$gcc"],
+      "detail": "Runs the 'make' command to build the project."
+    }
+  ]
+}
