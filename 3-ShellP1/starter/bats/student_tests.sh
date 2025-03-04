@@ -4,193 +4,120 @@
 # 
 # Create your unit tests suit in this file
 
-# Setup and teardown helpers
-setup() {
-    TEST_DIR="$(mktemp -d)"
-    mkdir -p "$TEST_DIR/subdir"
-    ORIG_DIR="$(pwd)"
-    DSH_PATH="$ORIG_DIR/dsh"  # Store full path to dsh
-    cd "$TEST_DIR"
-}
-
-teardown() {
-    cd "$ORIG_DIR"
-    rm -rf "$TEST_DIR"
-}
-
-# Basic command execution tests
-@test "execute simple external command" {
-    run "$DSH_PATH" <<EOF
+@test "Example: check ls runs without errors" {
+    run ./dsh <<EOF                
 ls
-exit
 EOF
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "subdir" ]]
-}
 
-@test "execute command with multiple arguments" {
-    run "$DSH_PATH" <<EOF
-ls -la subdir
-exit
-EOF
+    # Assertions
     [ "$status" -eq 0 ]
 }
 
-# Empty input and whitespace tests
-@test "handle empty input" {
-    run "$DSH_PATH" <<EOF
-
+@test "Simple pipe test: ls | grep dsh" {
+    run ./dsh <<EOF
+ls | grep dsh
 exit
 EOF
+
+    # Assertions
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "warning: no commands provided" ]]
+    [[ "$output" == *"dsh"* ]]
 }
 
-@test "handle whitespace-only input" {
-    run "$DSH_PATH" <<EOF
-   
+@test "Multiple pipe test: ls | grep dsh | wc -l" {
+    run ./dsh <<EOF
+ls | grep dsh | wc -l
 exit
 EOF
+
+    # Assertions
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "warning: no commands provided" ]]
+    [[ "$output" =~ [0-9]+ ]]
 }
 
-# Quote handling tests
-@test "preserve spaces in quoted strings" {
-    run "$DSH_PATH" <<EOF
-echo "  hello   world  "
+@test "Error handling: invalid command in pipe" {
+    run ./dsh <<EOF
+ls | nonexistentcommand | wc -l
 exit
 EOF
+
+    # Assertions
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "  hello   world  " ]]
+    [[ "$output" == *"command not found"* ]]
 }
 
-@test "handle multiple quoted arguments" {
-    run "$DSH_PATH" <<EOF
-echo "first arg" "second   arg" "third"
+@test "Too many pipes error" {
+    run ./dsh <<EOF
+cmd1 | cmd2 | cmd3 | cmd4 | cmd5 | cmd6 | cmd7 | cmd8 | cmd9
 exit
 EOF
+
+    # Assertions
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "first arg second   arg third" ]]
+    [[ "$output" == *"piping limited to"* ]]
 }
 
-# CD command tests
-@test "cd with no arguments stays in same directory" {
-    run "$DSH_PATH" <<EOF
-pwd
-cd
-pwd
+@test "Built-in command with pipe should execute as normal command" {
+    run ./dsh <<EOF
+echo test | cd /
 exit
 EOF
+
+    # Assertions
     [ "$status" -eq 0 ]
-    first_pwd=$(echo "$output" | grep "/tmp" | head -n1)
-    second_pwd=$(echo "$output" | grep "/tmp" | tail -n1)
-    [ "$first_pwd" = "$second_pwd" ]
+    [[ "$output" == *"test"* ]]
 }
 
-@test "cd to valid directory" {
-    run "$DSH_PATH" <<EOF
-cd subdir
-pwd
+@test "Input redirection test" {
+    echo "hello world" > test_input.txt
+    run ./dsh <<EOF
+cat < test_input.txt
 exit
 EOF
+
+    # Assertions
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "subdir" ]]
+    [[ "$output" == *"hello world"* ]]
+    rm -f test_input.txt
 }
 
-@test "cd to invalid directory" {
-    run "$DSH_PATH" <<EOF
-cd nonexistent
+@test "Output redirection test" {
+    run ./dsh <<EOF
+echo "hello, class" > test_output.txt
+cat test_output.txt
 exit
 EOF
+
+    # Assertions
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "cd failed" ]]
+    [[ "$output" == *"hello, class"* ]]
+    rm -f test_output.txt
 }
 
-# Error handling tests
-@test "handle nonexistent command" {
-    run "$DSH_PATH" <<EOF
-nonexistentcommand
+@test "Combined pipe and redirection test" {
+    run ./dsh <<EOF
+echo "hello world" | grep "hello" > test_combined.txt
+cat test_combined.txt
 exit
 EOF
+
+    # Assertions
     [ "$status" -eq 0 ]
-    [[ "$output" =~ "command not found in PATH" ]]
+    [[ "$output" == *"hello world"* ]]
+    rm -f test_combined.txt
 }
 
-@test "handle command with invalid arguments" {
-    run "$DSH_PATH" <<EOF
-ls --invalid-flag
+@test "Append redirection test" {
+    run ./dsh <<EOF
+echo "hello, class" > test_append.txt
+echo "this is line 2" >> test_append.txt
+cat test_append.txt
 exit
 EOF
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "unrecognized option" ]]
-}
 
-# Exit command test
-@test "exit command works" {
-    run "$DSH_PATH" <<EOF
-exit
-EOF
+    # Assertions
     [ "$status" -eq 0 ]
-}
-
-# Multiple space handling
-@test "collapse multiple spaces between arguments" {
-    run "$DSH_PATH" <<EOF
-echo hello     world
-exit
-EOF
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "hello world" ]]
-}
-
-# Complex command tests
-@test "handle complex command with quotes and multiple args" {
-    run "$DSH_PATH" <<EOF
-echo "quoted arg" normal-arg "spaced   arg" last
-exit
-EOF
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "quoted arg normal-arg spaced   arg last" ]]
-}
-
-@test "command not found error handling" {
-    run "$DSH_PATH" <<EOF
-nonexistentcommand
-exit
-EOF
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "command not found in PATH" ]]
-}
-
-@test "permission denied error handling" {
-    touch testfile
-    chmod -x testfile
-    run "$DSH_PATH" <<EOF
-./testfile
-exit
-EOF
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "permission denied" ]]
-    rm testfile
-}
-
-@test "rc command shows last return code" {
-    run "$DSH_PATH" <<EOF
-nonexistentcommand
-rc
-exit
-EOF
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "2" ]]  # ENOENT is usually 2
-}
-
-@test "rc command shows success" {
-    run "$DSH_PATH" <<EOF
-true
-rc
-exit
-EOF
-    [ "$status" -eq 0 ]
-    [[ "$output" =~ "0" ]]
+    [[ "$output" == *"hello, class"* ]]
+    [[ "$output" == *"this is line 2"* ]]
+    rm -f test_append.txt
 }
