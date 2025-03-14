@@ -1,3 +1,5 @@
+## I did the extra credit, my server is multi-threaded
+
 ## Remote Drexel Shell
 
 This work builds on your previous shell version that executed commands and supported pipes.  Except this time, we will enable the shell program to be executed over a network.  To do this we will enhance our `dsh` executable to accept some parameters.  Specifically, `dsh` should mirror the behavior of the piped version of your shell, performing local `fork/exec` to run commands, including built-in commands.  However, `dsh_cli.c` has been enhanced to support additional command line arguments:
