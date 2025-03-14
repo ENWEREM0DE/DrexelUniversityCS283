@@ -150,3 +150,120 @@ EOF
     [ "$status" -eq 0 ]
     [[ "${output}" =~ "1" ]]  # false command returns 1
 }
+
+@test "Concurrent clients (threaded mode)" {
+    # Kill any existing server and start a new one in threaded mode
+    if [ -n "$SERVER_PID" ]; then
+        kill $SERVER_PID 2>/dev/null || true
+    fi
+    
+    # Start server in threaded mode
+    ./dsh -s -i 0.0.0.0 -p 5678 -x > server.log 2>&1 &
+    SERVER_PID=$!
+    sleep 1
+
+    # Start first client that sleeps
+    ./dsh -c -i 127.0.0.1 -p 5678 > client1.out 2>&1 <<EOF &
+sleep 3
+echo "client1 done"
+exit
+EOF
+    CLIENT1_PID=$!
+
+    # Start second client immediately
+    ./dsh -c -i 127.0.0.1 -p 5678 > client2.out 2>&1 <<EOF
+echo "client2 done"
+exit
+EOF
+
+    # Wait for first client to finish
+    wait $CLIENT1_PID
+
+    # Check that client2 finished before client1 (concurrent execution)
+    grep -q "client2 done" client2.out
+    grep -q "client1 done" client1.out
+
+    # Verify timestamps to ensure concurrent execution
+    TIMESTAMP1=$(stat -f "%m" client1.out)
+    TIMESTAMP2=$(stat -f "%m" client2.out)
+    [ $TIMESTAMP2 -lt $TIMESTAMP1 ]
+
+    # Clean up
+    rm -f client1.out client2.out
+}
+
+@test "Multiple concurrent clients (threaded mode)" {
+    # Kill any existing server and start a new one in threaded mode
+    if [ -n "$SERVER_PID" ]; then
+        kill $SERVER_PID 2>/dev/null || true
+    fi
+    
+    # Start server in threaded mode
+    ./dsh -s -i 0.0.0.0 -p 5678 -x > server.log 2>&1 &
+    SERVER_PID=$!
+    sleep 1
+
+    # Array to store client PIDs
+    CLIENT_PIDS=()
+
+    # Start multiple clients simultaneously
+    for i in {1..5}; do
+        ./dsh -c -i 127.0.0.1 -p 5678 > "client${i}.out" 2>&1 <<EOF &
+echo "client${i} running"
+sleep $((1 + RANDOM % 2))
+echo "client${i} done"
+exit
+EOF
+        # Store the PID of the background process
+        CLIENT_PIDS+=($!)
+    done
+
+    # Wait for all clients with a timeout
+    TIMEOUT=10
+    START_TIME=$SECONDS
+    while true; do
+        # Check if all processes are done
+        ALL_DONE=true
+        for pid in "${CLIENT_PIDS[@]}"; do
+            if kill -0 $pid 2>/dev/null; then
+                ALL_DONE=false
+                break
+            fi
+        done
+
+        if $ALL_DONE; then
+            break
+        fi
+
+        # Check for timeout
+        if [ $((SECONDS - START_TIME)) -gt $TIMEOUT ]; then
+            echo "Timeout waiting for clients"
+            # Kill remaining processes
+            for pid in "${CLIENT_PIDS[@]}"; do
+                kill $pid 2>/dev/null || true
+            done
+            return 1
+        fi
+
+        sleep 0.1
+    done
+
+    # Check all clients completed successfully
+    for i in {1..5}; do
+        if [ ! -f "client${i}.out" ]; then
+            echo "client${i}.out does not exist"
+            return 1
+        fi
+        if ! grep -q "client${i} running" "client${i}.out"; then
+            echo "client${i} did not start"
+            return 1
+        fi
+        if ! grep -q "client${i} done" "client${i}.out"; then
+            echo "client${i} did not finish"
+            return 1
+        fi
+    done
+
+    # Clean up
+    rm -f client*.out
+}

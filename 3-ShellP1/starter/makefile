@@ -1,6 +1,7 @@
 # Compiler settings
 CC = gcc
 CFLAGS = -Wall -Wextra -g -D_GNU_SOURCE
+LDFLAGS = -pthread
 
 # Target executable name
 TARGET = dsh
@@ -14,7 +15,7 @@ all: $(TARGET)
 
 # Compile source to executable
 $(TARGET): $(SRCS) $(HDRS)
-	$(CC) $(CFLAGS) -o $(TARGET) $(SRCS)
+	$(CC) $(CFLAGS) -o $(TARGET) $(SRCS) $(LDFLAGS)
 
 # Clean up build files
 clean:

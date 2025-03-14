@@ -7,6 +7,7 @@
 #include <unistd.h>
 #include <sys/un.h>
 #include <fcntl.h>
+#include <pthread.h>
 
 //INCLUDES for extra credit
 //#include <signal.h>
@@ -49,8 +50,8 @@ int start_server(char *ifaces, int port, int is_threaded) {
     int svr_socket;
     int rc;
 
-    // Suppress unused parameter warning
-    (void)is_threaded;
+    // Enable threaded mode if requested
+    set_threaded_server(is_threaded);
 
     svr_socket = boot_server(ifaces, port);
     if (svr_socket < 0) {
@@ -159,52 +160,47 @@ int boot_server(char *ifaces, int port) {
     return svr_socket;
 }
 
-/*
- * process_cli_requests(svr_socket)
- *      svr_socket:  The server socket that was obtained from boot_server()
- *   
- *  This function handles managing client connections.  It does this using
- *  the following logic
- * 
- *      1.  Starts a while(1) loop:
- *  
- *          a. Calls accept() to wait for a client connection. Recall that 
- *             the accept() function returns another socket specifically
- *             bound to a client connection. 
- *          b. Calls exec_client_requests() to handle executing commands
- *             sent by the client. It will use the socket returned from
- *             accept().
- *          c. Loops back to the top (step 2) to accept connecting another
- *             client.  
- * 
- *          note that the exec_client_requests() return code should be
- *          negative if the client requested the server to stop by sending
- *          the `stop-server` command.  If this is the case step 2b breaks
- *          out of the while(1) loop. 
- * 
- *      2.  After we exit the loop, we need to cleanup.  Dont forget to 
- *          free the buffer you allocated in step #1.  Then call stop_server()
- *          to close the server socket. 
- * 
- *  Returns:
- * 
- *      OK_EXIT:  When the client sends the `stop-server` command this function
- *                should return OK_EXIT. 
- * 
- *      ERR_RDSH_COMMUNICATION:  This error code terminates the loop and is
- *                returned from this function in the case of the accept() 
- *                function failing. 
- * 
- *      OTHERS:   See exec_client_requests() for return codes.  Note that positive
- *                values will keep the loop running to accept additional client
- *                connections, and negative values terminate the server. 
- * 
- */
+// Structure to pass data to thread
+typedef struct {
+    int cli_socket;
+    int svr_socket;  // Need server socket for stop-server command
+} thread_args_t;
+
+// Global variable to track if server is running in threaded mode
+static int is_threaded = 0;
+static pthread_mutex_t server_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+void set_threaded_server(int val) {
+    is_threaded = val;
+}
+
+void *handle_client(void *arg) {
+    thread_args_t *args = (thread_args_t *)arg;
+    int cli_socket = args->cli_socket;
+    int svr_socket = args->svr_socket;
+    int rc;
+
+    rc = exec_client_requests(cli_socket);
+    close(cli_socket);
+
+    if (rc == OK_EXIT) {
+        // Stop server requested
+        pthread_mutex_lock(&server_mutex);
+        printf("Server stopping\n");
+        close(svr_socket);
+        exit(0);  // Force immediate exit
+        pthread_mutex_unlock(&server_mutex);
+    }
+
+    free(args);
+    return NULL;
+}
+
 int process_cli_requests(int svr_socket) {
     int cli_socket;
     struct sockaddr_in cli_addr;
     socklen_t cli_len = sizeof(cli_addr);
-    int rc;
+    int rc = OK;
 
     while (1) {
         cli_socket = accept(svr_socket, (struct sockaddr*)&cli_addr, &cli_len);
@@ -214,17 +210,40 @@ int process_cli_requests(int svr_socket) {
         }
 
         printf("Client connected\n");
-        rc = exec_client_requests(cli_socket);
-        close(cli_socket);
+        
+        if (is_threaded) {
+            // Create thread arguments
+            thread_args_t *args = malloc(sizeof(thread_args_t));
+            if (!args) {
+                perror("malloc");
+                close(cli_socket);
+                continue;
+            }
+            args->cli_socket = cli_socket;
+            args->svr_socket = svr_socket;
 
-        if (rc == OK_EXIT) {
-            printf("Server stopping\n");
-            close(svr_socket);
-            exit(0);  // Force immediate exit
+            // Create new thread
+            pthread_t thread;
+            if (pthread_create(&thread, NULL, handle_client, args) != 0) {
+                perror("pthread_create");
+                free(args);
+                close(cli_socket);
+                continue;
+            }
+            pthread_detach(thread);  // Don't need to join
+        } else {
+            // Single-threaded mode
+            rc = exec_client_requests(cli_socket);
+            close(cli_socket);
+            if (rc == OK_EXIT) {
+                printf("Server stopping\n");
+                close(svr_socket);
+                exit(0);
+            }
         }
     }
 
-    return OK;
+    return rc;
 }
 
 /*
