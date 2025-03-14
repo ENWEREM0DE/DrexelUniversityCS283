@@ -1,6 +1,6 @@
 # Compiler settings
 CC = gcc
-CFLAGS = -Wall -Wextra -g
+CFLAGS = -Wall -Wextra -g -D_GNU_SOURCE
 
 # Target executable name
 TARGET = dsh
